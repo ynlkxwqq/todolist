@@ -18,7 +18,7 @@
 
 
 # Dockerfile
-FROM golang:1.21-alpine AS build
+FROM golang:1.22.6 AS build
 WORKDIR /app
 ENV CGO_ENABLED=0
 COPY go.mod go.sum ./
