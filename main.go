@@ -1,24 +1,3 @@
-// package main
-
-// import (
-// 	"embed"
-// 	"io/fs"
-// 	"todo-list/internal/app"
-// 	"todo-list/internal/server"
-// )
-
-// //go:embed api/docs/*
-// var dist embed.FS
-
-// // FS holds embedded swagger-ui files
-// var FS, _ = fs.Sub(dist, "api/docs")
-
-// func main() {
-// 	server.FS = FS
-
-// 	app.Run()
-// }
-
 package main
 
 import (
@@ -31,13 +10,13 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	_ "github.com/lib/pq"
+	_ "github.com/mattn/go-sqlite3"
 )
 
 type Task struct {
 	ID       string    `json:"id"`
 	Title    string    `json:"title"`
-	ActiveAt string    `json:"activeAt"` // YYYY-MM-DD
+	ActiveAt string    `json:"activeAt"`
 	Done     bool      `json:"done,omitempty"`
 	Created  time.Time `json:"-"`
 }
@@ -55,26 +34,38 @@ type UpdateTaskRequest struct {
 var db *sql.DB
 
 func main() {
-	dsn := getEnv("DATABASE_URL", "postgres://postgres:postgres@localhost:5432/todo?sslmode=disable")
+	// === 1. Connect to SQLite ===
+	dsn := getEnv("DATABASE_URL", "./todo.db")
 	var err error
-	db, err = sql.Open("postgres", dsn)
+	db, err = sql.Open("sqlite3", dsn)
 	if err != nil {
-		log.Fatalf("db open: %v", err)
+		log.Fatalf("open db: %v", err)
 	}
 	defer db.Close()
 
-	// простая проверка соединения
-	if err = db.Ping(); err != nil {
-		log.Fatalf("db ping: %v", err)
+	// === 2. Create table if not exists ===
+	schema := `
+	CREATE TABLE IF NOT EXISTS tasks (
+		id TEXT PRIMARY KEY,
+		title TEXT NOT NULL,
+		active_at DATE NOT NULL,
+		done BOOLEAN DEFAULT 0,
+		created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+		UNIQUE(title, active_at)
+	);`
+	if _, err := db.Exec(schema); err != nil {
+		log.Fatalf("create schema: %v", err)
 	}
 
 	http.HandleFunc("/api/todo-list/tasks", tasksHandler)
-	http.HandleFunc("/api/todo-list/tasks/", taskByIDHandler) // for paths with ID
+	http.HandleFunc("/api/todo-list/tasks/", taskByIDHandler)
 
 	port := getEnv("PORT", "8080")
-	log.Printf("server listening on :%s", port)
+	log.Printf("✅ Server running on :%s", port)
 	log.Fatal(http.ListenAndServe(":"+port, nil))
 }
+
+// === HANDLERS ===
 
 func tasksHandler(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
@@ -87,7 +78,6 @@ func tasksHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// POST /api/todo-list/tasks
 func handleCreateTask(w http.ResponseWriter, r *http.Request) {
 	var req CreateTaskRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -105,10 +95,9 @@ func handleCreateTask(w http.ResponseWriter, r *http.Request) {
 	}
 
 	id := uuid.New().String()
-	q := `INSERT INTO tasks(id, title, active_at) VALUES ($1,$2,$3)`
+	q := `INSERT INTO tasks(id, title, active_at) VALUES (?, ?, ?)`
 	_, err = db.Exec(q, id, req.Title, activeAt)
 	if err != nil {
-		// check unique constraint
 		if isUniqueViolation(err) {
 			httpError(w, http.StatusNotFound, "task already exists")
 			return
@@ -118,11 +107,9 @@ func handleCreateTask(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.WriteHeader(http.StatusCreated)
-	resp := map[string]string{"id": id}
-	_ = json.NewEncoder(w).Encode(resp)
+	json.NewEncoder(w).Encode(map[string]string{"id": id})
 }
 
-// PUT /api/todo-list/tasks/{ID}
 func handleUpdateTask(w http.ResponseWriter, r *http.Request, id string) {
 	var req UpdateTaskRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -143,17 +130,16 @@ func handleUpdateTask(w http.ResponseWriter, r *http.Request, id string) {
 		return
 	}
 
-	// обновляем
-	result, err := db.Exec(`UPDATE tasks SET title=$1, active_at=$2 WHERE id=$3`, req.Title, activeAt, id)
+	res, err := db.Exec(`UPDATE tasks SET title=?, active_at=? WHERE id=?`, req.Title, activeAt, id)
 	if err != nil {
 		if isUniqueViolation(err) {
-			httpError(w, http.StatusNotFound, "task already exists with same title and date")
+			httpError(w, http.StatusNotFound, "duplicate task")
 			return
 		}
 		httpError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
-	rows, _ := result.RowsAffected()
+	rows, _ := res.RowsAffected()
 	if rows == 0 {
 		httpError(w, http.StatusNotFound, "task not found")
 		return
@@ -161,13 +147,12 @@ func handleUpdateTask(w http.ResponseWriter, r *http.Request, id string) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// DELETE /api/todo-list/tasks/{ID}
 func handleDeleteTask(w http.ResponseWriter, r *http.Request, id string) {
 	if id == "" {
 		httpError(w, http.StatusBadRequest, "id required")
 		return
 	}
-	res, err := db.Exec(`DELETE FROM tasks WHERE id=$1`, id)
+	res, err := db.Exec(`DELETE FROM tasks WHERE id=?`, id)
 	if err != nil {
 		httpError(w, http.StatusInternalServerError, "internal error")
 		return
@@ -180,13 +165,12 @@ func handleDeleteTask(w http.ResponseWriter, r *http.Request, id string) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// PUT /api/todo-list/tasks/{ID}/done
 func handleMarkDone(w http.ResponseWriter, r *http.Request, id string) {
 	if id == "" {
 		httpError(w, http.StatusBadRequest, "id required")
 		return
 	}
-	res, err := db.Exec(`UPDATE tasks SET done = true WHERE id=$1`, id)
+	res, err := db.Exec(`UPDATE tasks SET done = 1 WHERE id=?`, id)
 	if err != nil {
 		httpError(w, http.StatusInternalServerError, "internal error")
 		return
@@ -199,7 +183,6 @@ func handleMarkDone(w http.ResponseWriter, r *http.Request, id string) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// GET /api/todo-list/tasks?status=active|done
 func handleListTasks(w http.ResponseWriter, r *http.Request) {
 	status := r.URL.Query().Get("status")
 	if status == "" {
@@ -208,11 +191,11 @@ func handleListTasks(w http.ResponseWriter, r *http.Request) {
 	var rows *sql.Rows
 	var err error
 	today := time.Now().UTC().Format("2006-01-02")
+
 	if status == "done" {
-		rows, err = db.Query(`SELECT id, title, active_at, done, created_at FROM tasks WHERE done = true ORDER BY created_at`)
+		rows, err = db.Query(`SELECT id, title, active_at, done, created_at FROM tasks WHERE done = 1 ORDER BY created_at`)
 	} else {
-		// active: active_at <= today and done = false
-		rows, err = db.Query(`SELECT id, title, active_at, done, created_at FROM tasks WHERE done = false AND active_at <= $1 ORDER BY created_at`, today)
+		rows, err = db.Query(`SELECT id, title, active_at, done, created_at FROM tasks WHERE done = 0 AND active_at <= ? ORDER BY created_at`, today)
 	}
 	if err != nil {
 		httpError(w, http.StatusInternalServerError, "internal error")
@@ -230,7 +213,6 @@ func handleListTasks(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		t.ActiveAt = activeAt.Format("2006-01-02")
-		// если выходной — добавляем префикс в возвращаемом title
 		if isWeekend {
 			t.Title = "ВЫХОДНОЙ - " + t.Title
 		}
@@ -241,25 +223,21 @@ func handleListTasks(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(tasks)
 }
 
-// общий роутинг по пути /api/todo-list/tasks/{...}
+// === ROUTER ===
 func taskByIDHandler(w http.ResponseWriter, r *http.Request) {
-	// ожидаем пути вида /api/todo-list/tasks/{id} или /api/todo-list/tasks/{id}/done
-	path := r.URL.Path
-	// отрезаем префикс
 	prefix := "/api/todo-list/tasks/"
-	if len(path) <= len(prefix) {
+	if len(r.URL.Path) <= len(prefix) {
 		httpError(w, http.StatusNotFound, "not found")
 		return
 	}
-	rest := path[len(prefix):] // {id} или {id}/done
-	// если содержит "/done"
+	rest := r.URL.Path[len(prefix):]
+
 	if r.Method == http.MethodPut && len(rest) > 5 && rest[len(rest)-5:] == "/done" {
 		id := rest[:len(rest)-5]
 		handleMarkDone(w, r, id)
 		return
 	}
 
-	// иначе rest == id
 	id := rest
 	switch r.Method {
 	case http.MethodPut:
@@ -271,19 +249,18 @@ func taskByIDHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// ===== helpers =====
+// === HELPERS ===
 func httpError(w http.ResponseWriter, code int, message string) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(code)
-	_ = json.NewEncoder(w).Encode(map[string]string{"error": message})
+	json.NewEncoder(w).Encode(map[string]string{"error": message})
 }
 
 func parseDate(s string) (time.Time, error) {
 	if s == "" {
 		return time.Time{}, errors.New("empty date")
 	}
-	t, err := time.Parse("2006-01-02", s)
-	return t, err
+	return time.Parse("2006-01-02", s)
 }
 
 func validateTitle(t string) error {
@@ -297,25 +274,19 @@ func validateTitle(t string) error {
 }
 
 func isUniqueViolation(err error) bool {
-	// very simple check for pq unique violation text
 	if err == nil {
 		return false
 	}
-	return (err.Error() != "" && (contains(err.Error(), "unique") || contains(err.Error(), "duplicate key")))
+	return (err.Error() != "" && (contains(err.Error(), "UNIQUE") || contains(err.Error(), "constraint failed")))
 }
 
 func contains(s, sub string) bool {
-	return len(s) >= len(sub) && ((len(s) > 0) && (stringIndex(s, sub) >= 0))
-}
-
-// simple string index (avoid importing strings lib multiple times)
-func stringIndex(s, sep string) int {
-	for i := 0; i+len(sep) <= len(s); i++ {
-		if s[i:i+len(sep)] == sep {
-			return i
+	for i := 0; i+len(sub) <= len(s); i++ {
+		if s[i:i+len(sub)] == sub {
+			return true
 		}
 	}
-	return -1
+	return false
 }
 
 func isWeekendDay(t time.Time) bool {
