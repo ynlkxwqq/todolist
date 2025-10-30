@@ -18,17 +18,24 @@
 
 
 # Dockerfile
+# Этап сборки
 FROM golang:1.22.6 AS build
+
 WORKDIR /app
-ENV CGO_ENABLED=0
+
 COPY go.mod go.sum ./
 RUN go mod download
-COPY . .
-RUN go build -o /todo ./cmd/server
 
+COPY . .
+RUN go build -o /todo .
+
+# Финальный минимальный образ
 FROM alpine:3.18
+
 RUN apk add --no-cache ca-certificates
+
 COPY --from=build /todo /todo
+
 EXPOSE 8080
-ENV PORT=8080
-CMD ["/todo"]
+
+ENTRYPOINT ["/todo"]
