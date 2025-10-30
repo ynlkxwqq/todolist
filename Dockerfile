@@ -1,56 +1,34 @@
-# FROM golang:1.22.5-alpine AS builder
-
-# WORKDIR /build
-
-# COPY . .
-
-# RUN CGO_ENABLED=0 GOOS=linux go build -o todo-list .
-
-# FROM alpine AS hoster
-
-# WORKDIR /app
-
-# COPY --from=builder /build/.env ./.env
-# COPY --from=builder /build/migrations ./migrations
-# COPY --from=builder /build/todo-list ./todo-list
-
-# ENTRYPOINT [ "./todo-list" ]
-
-
-# Dockerfile
 # --- Build stage ---
-# --- Build stage ---
-FROM golang:1.22.6 AS build
-
-# Рабочая директория
+FROM golang:1.23 AS builder
 WORKDIR /app
 
-# Отключаем cgo для статической сборки
-ENV CGO_ENABLED=0
+# Включаем CGO (обязательно для sqlite3)
+ENV CGO_ENABLED=1
+ENV GOOS=linux
+ENV GOARCH=amd64
 
-# Копируем go.mod и go.sum для кеширования зависимостей
+# Устанавливаем компилятор C (для sqlite3)
+RUN apt-get update && apt-get install -y gcc
+
+# Копируем зависимости и скачиваем модули
 COPY go.mod go.sum ./
-
-# Скачиваем зависимости
 RUN go mod download
 
-# Копируем весь проект
+# Копируем остальной код
 COPY . .
 
 # Собираем бинарник
-RUN go build -o /todo main.go
+RUN go build -o /todo .
 
 # --- Final stage ---
-FROM alpine:3.18
+FROM debian:bookworm-slim
+WORKDIR /app
 
-# Устанавливаем сертификаты для HTTPS
-RUN apk add --no-cache ca-certificates
+# Устанавливаем SQLite, если нужно
+RUN apt-get update && apt-get install -y sqlite3
 
-# Копируем бинарник из build stage
-COPY --from=build /todo /todo
+# Копируем бинарник
+COPY --from=builder /todo .
 
-# Порт приложения
-EXPOSE 8080
-
-# Запуск бинарника
-ENTRYPOINT ["/todo"]
+# Запускаем сервер
+CMD ["/app/todo"]
