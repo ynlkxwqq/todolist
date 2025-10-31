@@ -34,7 +34,7 @@ type UpdateTaskRequest struct {
 var db *sql.DB
 
 func main() {
-	// === 1. Connect to SQLite ===
+	
 	dsn := getEnv("DATABASE_URL", "./todo.db")
 	var err error
 	db, err = sql.Open("sqlite3", dsn)
@@ -43,7 +43,7 @@ func main() {
 	}
 	defer db.Close()
 
-	// === 2. Create table if not exists ===
+	
 	schema := `
 	CREATE TABLE IF NOT EXISTS tasks (
 		id TEXT PRIMARY KEY,
@@ -65,7 +65,7 @@ func main() {
 	log.Fatal(http.ListenAndServe(":"+port, nil))
 }
 
-// === HANDLERS ===
+
 
 func tasksHandler(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
@@ -223,7 +223,7 @@ func handleListTasks(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(tasks)
 }
 
-// === ROUTER ===
+
 func taskByIDHandler(w http.ResponseWriter, r *http.Request) {
 	prefix := "/api/todo-list/tasks/"
 	if len(r.URL.Path) <= len(prefix) {
@@ -249,7 +249,7 @@ func taskByIDHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// === HELPERS ===
+
 func httpError(w http.ResponseWriter, code int, message string) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(code)
