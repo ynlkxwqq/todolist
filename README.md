@@ -157,4 +157,4 @@ Delete a task:
 curl -X DELETE https://todolist-4-p567.onrender.com/api/todo-list/tasks/46861dbd-3ac1-4fad-bca0-849771302688
 
 
-server: https://todolist-4-p567.onrender.com or https://todolist-4-p567.onrender.com/api/todo-list/tasks
+server: https://todolist-mine.onrender.com or https://todolist-mine.onrender.com/api/todo-list/tasks
