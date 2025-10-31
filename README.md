@@ -15,7 +15,6 @@ Docker Compose — service orchestration
 
 Render — deployment and hosting platform
 ## Project Structure
-.
 ├── Dockerfile
 
 ├── docker-compose.yml
@@ -52,7 +51,7 @@ make build   # build the binary
 make run     # run locally
 make up      # start via docker-compose
 make down    # stop containers
-#� Deploying to Render
+# Deploying to Render
 Go to Render.com and create a Web Service.
 Connect your GitHub repository.
 Set Build Command:
@@ -61,43 +60,65 @@ Set Start Command:
 ./todo
 Render will automatically build and deploy your service.
 ## API Endpoints
-️ Create a new task
+️Create a new task
+
 POST /api/todo-list/tasks
+
 {
   "title": "Buy a book",
   "activeAt": "2025-10-30"
 }
+
  Response:
+ 
 {
   "id": "46861dbd-3ac1-4fad-bca0-849771302688"
 }
+
 Status codes
+
+
 201 Created — task created successfully
+
 404 Not Found — task with same title and activeAt already exists
+
 400 Bad Request — invalid data
+
+
+
  Update an existing task
+ 
 PUT /api/todo-list/tasks/{ID}
+
 {
   "title": "Buy a book - updated",
   "activeAt": "2025-10-31"
 }
+
  Response: 204 No Content
+ 
 Errors:
+
 404 Not Found — task not found
  Delete a task
 DELETE /api/todo-list/tasks/{ID}
  Response: 204 No Content
+
+ 
 Errors:
 404 Not Found — task not found
  Mark a task as completed
 PUT /api/todo-list/tasks/{ID}/done
- Response: 204 No Content
+ Response: 204 No Content\
+ 
 Errors:
+
 404 Not Found — task not found
  Get all tasks
 GET /api/todo-list/tasks?status=active
 or
 GET /api/todo-list/tasks?status=done
+
 # Example response:
 [
   {
