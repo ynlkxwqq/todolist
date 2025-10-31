@@ -1,38 +1,3 @@
-# services:
-#   todo-list:
-#     image: todo-list
-#     container_name: todo-list
-#     build:
-#       context: .
-#       dockerfile: Dockerfile
-#     ports:
-#       - "8080:8080"
-#     env_file:
-#       - .env
-#     volumes:
-#       - ./.env:/app/.env
-#     depends_on:
-#       db:
-#         condition: service_healthy
-#   db:
-#     image: postgres:16.3
-#     ports:
-#       - "5432:5432"
-#     env_file:
-#       - .env
-#     environment:
-#       - POSTGRES_DB=DB_NAME
-#       - POSTGRES_USER=DB_USERNAME
-#       - POSTGRES_PASSWORD=DB_PASSWORD
-#     healthcheck:
-#       test:  pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB
-#       interval: 3s
-#       timeout: 5s
-#       retries: 5
-#     restart: always
-
-
-
 version: "3.8"
 services:
   db:
