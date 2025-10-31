@@ -6,20 +6,31 @@ The service also supports filtering by task status (active / done) and automatic
 “WEEKEND - ” to tasks scheduled on Saturdays or Sundays.
 ## Technologies Used
 Go (Golang) — main programming language
+
 SQLite — lightweight embedded database
+
 Docker — containerization
+
 Docker Compose — service orchestration
+
 Render — deployment and hosting platform
 ## Project Structure
 .
 ├── Dockerfile
+
 ├── docker-compose.yml
+
 ├── Makefile
+
 ├── go.mod
+
 ├── go.sum
+
 ├── main.go
+
 ├── internal/
 │   └── ... (business logic, handlers, configuration)
+
 └── README.md
 ## Requirements
 You’ll need the following tools installed:
